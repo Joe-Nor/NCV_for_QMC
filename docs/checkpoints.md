@@ -1,8 +1,26 @@
 # Public Checkpoints
 
 Do not commit checkpoint binaries to the git repository. Keep the repository for
-source code, documentation, and manifests, and archive checkpoint bundles on an
-external service with a persistent DOI.
+source code, documentation, and manifests, and archive checkpoint bundles as
+release assets or on an external service with a persistent DOI.
+
+## Download
+
+The curated public bundle for `v1.0.0` is available from GitHub Releases:
+
+- Release: <https://github.com/Joe-Nor/NCV_for_QMC/releases/tag/v1.0.0>
+- Archive: <https://github.com/Joe-Nor/NCV_for_QMC/releases/download/v1.0.0/public_checkpoints_ncv.tar.gz>
+- SHA256: <https://github.com/Joe-Nor/NCV_for_QMC/releases/download/v1.0.0/public_checkpoints_ncv.tar.gz.sha256>
+
+Archive checksum:
+
+```text
+b9251b3e4ce3ab26021aa9961ce82f3741b5961cdded1faab8cab441b7d4f1d4  public_checkpoints_ncv.tar.gz
+```
+
+The `v1.0.0` archive contains 84 inference checkpoints: 11 temperatures for
+`2x-2` and 10 temperatures for `3x1`, with numerator/denominator and even/odd
+models for each temperature.
 
 ## Recommended Scope
 

@@ -98,6 +98,19 @@ python python/nh_window/compute_energy_jackknife_Cov.py \
     --ckpt_denom_odd checkpoints/denominator/odd/best_model.pt
 ```
 
+## Public Checkpoints
+
+Curated inference checkpoints used for the reported neural-control-variate
+results are available from the GitHub release:
+
+- [v1.0.0 release](https://github.com/Joe-Nor/NCV_for_QMC/releases/tag/v1.0.0)
+- [public_checkpoints_ncv.tar.gz](https://github.com/Joe-Nor/NCV_for_QMC/releases/download/v1.0.0/public_checkpoints_ncv.tar.gz)
+- [SHA256 checksum](https://github.com/Joe-Nor/NCV_for_QMC/releases/download/v1.0.0/public_checkpoints_ncv.tar.gz.sha256)
+
+The archive contains 84 inference checkpoints for the `2x-2` and `3x1`
+systems. See [Public Checkpoint Preparation](docs/checkpoints.md) for the
+selection rule and manifest format.
+
 ## Documentation
 
 - [Installation Guide](docs/installation.md)
