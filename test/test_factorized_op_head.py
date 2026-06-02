@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python', 'nh_window', 'numerator'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python', 'train', 'numerator'))
 import train_transformer_parity_sign_v2_pe_nh_window_aug as tps
 
 OPERATOR_OFFSET = tps.OPERATOR_OFFSET
@@ -17,7 +17,7 @@ VOCAB = NB + OPERATOR_OFFSET
 bsites_arr, nn_sites, nb_bonds = tps.build_bsites(LX, LY)
 bond_meta = tps.compute_bond_metadata(bsites_arr, nb_bonds, LX, LY)
 assert bond_meta is not None
-bond_s1, bond_s2, bond_dir_arr, num_sites, n_dir = bond_meta
+bond_s1, bond_s2, bond_dir_arr, _bond_anchor_arr, num_sites, n_dir = bond_meta
 
 B, T = 4, 16
 
@@ -175,8 +175,8 @@ def test_gradient_flow():
                    deltaK_prefix=dkp, dk_candidates=dk_cand)
     loss = logits[:, :, OPERATOR_OFFSET:].sum()
     loss.backward()
-    assert model.bond_head[0].weight.grad is not None
-    assert model.bond_head[0].weight.grad.abs().max() > 0
+    assert model.bond_head[-1].weight.grad is not None
+    assert model.bond_head[-1].weight.grad.abs().max() > 0
     print("  PASS: gradient flow through site-bond correction")
 
 

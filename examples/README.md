@@ -39,11 +39,11 @@ python examples/train_numerator_example.py \
 ```
 
 The script prints the corresponding command for
-`python/nh_window/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py`.
+`python/train/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py`.
 Add `--run` to execute it.
 
 Train `parity=odd` separately, and repeat with
-`python/nh_window/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py`
+`python/train/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py`
 for denominator models.
 
 ## Evaluate Energy
@@ -59,7 +59,7 @@ python examples/compute_energy_example.py \
 ```
 
 The script prints the corresponding command for
-`python/nh_window/compute_energy_jackknife_Cov.py`. Add `--run` to execute it.
+`python/train/compute_energy_jackknife_Cov.py`. Add `--run` to execute it.
 
 ## Additional Resources
 

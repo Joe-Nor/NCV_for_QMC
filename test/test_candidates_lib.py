@@ -84,7 +84,7 @@ def brute_force_candidates(x_dense, bsites, nn, nb):
     return cand
 
 
-def test_lattice(lx, ly, n_samples=20, max_nh=30, seed=42):
+def _check_lattice(lx, ly, n_samples=20, max_nh=30, seed=42):
     """Test on random opstrings for a given lattice."""
     bsites, nn, nb = build_bsites(lx, ly)
     rng = np.random.RandomState(seed)
@@ -148,7 +148,7 @@ def test_lattice(lx, ly, n_samples=20, max_nh=30, seed=42):
     return n_fail == 0
 
 
-def test_edge_cases(bsites, nn, nb):
+def _check_edge_cases(bsites, nn, nb):
     """Test edge cases: nh=1, repeated bonds, etc."""
     print(f"\n=== Edge cases: nn={nn}, nb={nb} ===")
 
@@ -180,19 +180,27 @@ def test_edge_cases(bsites, nn, nb):
     return all_ok
 
 
+def test_candidates_lib_synthetic():
+    """Small pytest entry point that does not require external sample files."""
+    bsites_3x1, nn_3x1, nb_3x1 = build_bsites(3, 1)
+    assert _check_edge_cases(bsites_3x1, nn_3x1, nb_3x1)
+    assert _check_lattice(3, 1, n_samples=5, max_nh=8)
+    assert _check_lattice(2, -2, n_samples=5, max_nh=8)
+
+
 def main():
     all_ok = True
 
     # 3-site triangle (lx=3, ly=1): nn=3, nb=3
     bsites_3x1, nn_3x1, nb_3x1 = build_bsites(3, 1)
-    all_ok &= test_edge_cases(bsites_3x1, nn_3x1, nb_3x1)
-    all_ok &= test_lattice(3, 1, n_samples=50, max_nh=20)
+    all_ok &= _check_edge_cases(bsites_3x1, nn_3x1, nb_3x1)
+    all_ok &= _check_lattice(3, 1, n_samples=50, max_nh=20)
 
     # 2×2 tri PBC (lx=2, ly=-2): nn=4, nb=6
-    all_ok &= test_lattice(2, -2, n_samples=50, max_nh=30)
+    all_ok &= _check_lattice(2, -2, n_samples=50, max_nh=30)
 
     # 3×3 tri PBC (lx=3, ly=-3): nn=9, nb=27
-    all_ok &= test_lattice(3, -3, n_samples=20, max_nh=40)
+    all_ok &= _check_lattice(3, -3, n_samples=20, max_nh=40)
 
     print("\n" + "=" * 50)
     if all_ok:

@@ -11,6 +11,7 @@ import sys
 import os
 import struct
 import numpy as np
+import pytest
 
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -135,7 +136,7 @@ def read_v2_samples(filepath, max_samples=None):
     return header, samples
 
 
-def test_bit_exact(samples, bsites, nn, nb):
+def _check_bit_exact(samples, bsites, nn, nb):
     """Test 1: recomputed parity_prefix matches stored values at every position."""
     n_tested = 0
     n_pass = 0
@@ -168,7 +169,7 @@ def test_bit_exact(samples, bsites, nn, nb):
     return n_fail == 0
 
 
-def test_cyclic_K_invariance(samples, bsites, nn, nb, max_shifts=5):
+def _check_cyclic_K_invariance(samples, bsites, nn, nb, max_shifts=5):
     """Test 2: K is invariant under cyclic shifts."""
     n_tested = 0
     n_pass = 0
@@ -203,7 +204,7 @@ def test_cyclic_K_invariance(samples, bsites, nn, nb, max_shifts=5):
     return n_fail == 0
 
 
-def test_cyclic_parity_invariance(samples, bsites, nn, nb, max_shifts=5):
+def _check_cyclic_parity_invariance(samples, bsites, nn, nb, max_shifts=5):
     """Test 3: final parity is invariant under cyclic shifts."""
     n_tested = 0
     n_pass = 0
@@ -241,6 +242,24 @@ def test_cyclic_parity_invariance(samples, bsites, nn, nb, max_shifts=5):
     return n_fail == 0
 
 
+def test_parity_lib_sample_file():
+    """Pytest entry point for an optional RSSE V2 sample file."""
+    data_path = os.environ.get("RSSE_SAMPLE_PATH")
+    if not data_path:
+        pytest.skip("set RSSE_SAMPLE_PATH to run parity-prefix data validation")
+    if not os.path.exists(data_path):
+        pytest.skip(f"RSSE_SAMPLE_PATH does not exist: {data_path}")
+
+    header, samples = read_v2_samples(data_path)
+    bsites, nn, nb = build_bsites_from_header(
+        header['lx'], header['ly'], header['nn'], header['nb']
+    )
+    np.random.seed(42)
+    assert _check_bit_exact(samples, bsites, nn, nb)
+    assert _check_cyclic_K_invariance(samples, bsites, nn, nb)
+    assert _check_cyclic_parity_invariance(samples, bsites, nn, nb)
+
+
 def main():
     if len(sys.argv) > 1:
         data_path = sys.argv[1]
@@ -275,11 +294,11 @@ def main():
 
     np.random.seed(42)
 
-    ok1 = test_bit_exact(samples, bsites, nn, nb)
+    ok1 = _check_bit_exact(samples, bsites, nn, nb)
     print()
-    ok2 = test_cyclic_K_invariance(samples, bsites, nn, nb)
+    ok2 = _check_cyclic_K_invariance(samples, bsites, nn, nb)
     print()
-    ok3 = test_cyclic_parity_invariance(samples, bsites, nn, nb)
+    ok3 = _check_cyclic_parity_invariance(samples, bsites, nn, nb)
     print()
 
     if ok1 and ok2 and ok3:

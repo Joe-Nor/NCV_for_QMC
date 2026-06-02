@@ -10,7 +10,7 @@ from pathlib import Path
 
 def build_command(args):
     repo = Path(__file__).resolve().parents[1]
-    script = repo / "python" / "nh_window" / "numerator" / "train_transformer_parity_sign_v2_pe_nh_window_aug.py"
+    script = repo / "python" / "train" / "numerator" / "train_transformer_parity_sign_v2_pe_nh_window_aug.py"
     return [
         sys.executable,
         str(script),

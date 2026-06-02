@@ -23,7 +23,7 @@ import numpy as np
 
 _base = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(_base, "src"))
-sys.path.insert(0, os.path.join(_base, "python", "nh_window", "denumerator"))
+sys.path.insert(0, os.path.join(_base, "python", "train", "denumerator"))
 
 from parity_prefix_candidates_wrapper import compute_parity_prefix_candidates
 from train_transformer_parity_sign_v2_pe_nh_window_de_aug import (

@@ -4,7 +4,7 @@ import sys, os, math
 import numpy as np
 import torch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python', 'nh_window', 'numerator'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python', 'train', 'numerator'))
 import train_transformer_parity_sign_v2_pe_nh_window_aug as tps
 
 OPERATOR_OFFSET = tps.OPERATOR_OFFSET

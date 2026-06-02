@@ -181,7 +181,7 @@ mypy python/
 ```
 rsse-control-variates/
 ├── python/              # Python package
-│   ├── nh_window/      # Control variate computation
+│   ├── train/          # Training and CV evaluation
 │   ├── analysis/       # Analysis scripts
 │   └── __init__.py
 ├── src/                # Fortran libraries

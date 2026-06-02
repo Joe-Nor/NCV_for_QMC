@@ -60,27 +60,27 @@ The sampler reads `fortran/rsse_input.in` and `fortran/seed.in`.
 ### 2. Train models
 ```bash
 # Train numerator model (even parity)
-python python/nh_window/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py \
+python python/train/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py \
     --parity even \
     --data_glob "data/raw/*.bin" \
     --auto_nh_window 1 \
     --output_dir checkpoints/numerator/even
 
 # Train numerator model (odd parity)
-python python/nh_window/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py \
+python python/train/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py \
     --parity odd \
     --data_glob "data/raw/*.bin" \
     --auto_nh_window 1 \
     --output_dir checkpoints/numerator/odd
 
 # Train denominator models
-python python/nh_window/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py \
+python python/train/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py \
     --parity even \
     --data_glob "data/raw/*.bin" \
     --auto_nh_window 1 \
     --output_dir checkpoints/denominator/even
 
-python python/nh_window/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py \
+python python/train/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py \
     --parity odd \
     --data_glob "data/raw/*.bin" \
     --auto_nh_window 1 \
@@ -89,7 +89,7 @@ python python/nh_window/denumerator/train_transformer_parity_sign_v2_pe_nh_windo
 
 ### 3. Evaluate control variates
 ```bash
-python python/nh_window/compute_energy_jackknife_Cov.py \
+python python/train/compute_energy_jackknife_Cov.py \
     --data_train data/raw/train.bin \
     --data_test data/raw/test.bin \
     --ckpt_num_even checkpoints/numerator/even/best_model.pt \

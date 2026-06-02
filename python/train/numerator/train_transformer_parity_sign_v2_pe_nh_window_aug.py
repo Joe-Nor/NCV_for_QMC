@@ -543,6 +543,39 @@ def build_bsites(lx, ly):
     return bsites, nn, nb
 
 
+def compute_bond_metadata(bsites, nb, lx, ly):
+    """Return zero-indexed endpoint, direction, and anchor metadata for bonds."""
+    ly_abs = abs(ly)
+    num_sites = lx * ly_abs
+    directions = [(1, 0), (0, 1), (1, 1)]
+
+    bond_s1 = np.asarray(bsites[0, :nb], dtype=np.int64) - 1
+    bond_s2 = np.asarray(bsites[1, :nb], dtype=np.int64) - 1
+    bond_dir = np.zeros(nb, dtype=np.int64)
+    bond_anchor = np.zeros(nb, dtype=np.int64)
+
+    def site_id(x, y):
+        return (y % ly_abs) * lx + (x % lx)
+
+    for b in range(nb):
+        endpoints = {int(bond_s1[b]), int(bond_s2[b])}
+        found = None
+        for anchor in sorted(endpoints):
+            ax = anchor % lx
+            ay = anchor // lx
+            for d_idx, (dx, dy) in enumerate(directions):
+                if site_id(ax + dx, ay + dy) in endpoints:
+                    found = (anchor, d_idx)
+                    break
+            if found is not None:
+                break
+        if found is None:
+            found = (min(endpoints), 0)
+        bond_anchor[b], bond_dir[b] = found
+
+    return bond_s1, bond_s2, bond_dir, bond_anchor, num_sites, len(directions)
+
+
 def build_spatial_bond_perm(lx, ly, bsites, nb):
     """Build spatial-translation bond permutation table.
 
@@ -931,6 +964,75 @@ class AutoregressiveTransformer(nn.Module):
             bond_corr = bond_corr - bond_corr.mean(dim=-1, keepdim=True)
         zero_special = bond_corr.new_zeros(B, T, OPERATOR_OFFSET)
         return torch.cat([zero_special, bond_corr], dim=-1)
+
+    def diagnose_logit_components(self, h, dk_candidates=None,
+                                  input_padding_mask=None, targets=None):
+        """Summarize base, correction, and final operator-logit statistics."""
+        base = self.output_proj(h)
+        corr = None
+        if self.dk_mlp_head and dk_candidates is not None:
+            corr = self._compute_bond_correction(h, dk_candidates)
+            final = base + corr
+        else:
+            final = base
+
+        valid = torch.ones(h.shape[:2], dtype=torch.bool, device=h.device)
+        if input_padding_mask is not None:
+            valid = ~input_padding_mask
+
+        def op_values(x):
+            vals = x[:, :, OPERATOR_OFFSET:OPERATOR_OFFSET + self.nb_bonds]
+            return vals[valid]
+
+        def stats(prefix, x, out):
+            vals = op_values(x)
+            if vals.numel() == 0:
+                out[f"{prefix}_global_std"] = 0.0
+                out[f"{prefix}_candidate_spread"] = 0.0
+                out[f"{prefix}_common_mode_std"] = 0.0
+                return
+            out[f"{prefix}_global_std"] = float(vals.std(unbiased=False).item())
+            out[f"{prefix}_candidate_spread"] = float((vals.max(dim=-1).values - vals.min(dim=-1).values).mean().item())
+            out[f"{prefix}_common_mode_std"] = float(vals.mean(dim=-1).std(unbiased=False).item())
+
+        diag = {}
+        stats("base", base, diag)
+        if corr is not None:
+            stats("corr", corr, diag)
+            eps = 1.0e-12
+            diag["corr_candidate_over_base"] = diag["corr_candidate_spread"] / max(diag["base_candidate_spread"], eps)
+            diag["corr_common_over_candidate"] = diag["corr_common_mode_std"] / max(diag["corr_candidate_spread"], eps)
+
+        op_logits = op_values(final)
+        if op_logits.numel() == 0:
+            diag["final_op_entropy_mean"] = 0.0
+            diag["final_op_entropy_norm_mean"] = 0.0
+            diag["final_op_max_prob_mean"] = 0.0
+            diag["final_op_candidate_spread"] = 0.0
+        else:
+            probs = torch.softmax(op_logits, dim=-1)
+            entropy = -(probs * torch.log(probs.clamp_min(1.0e-12))).sum(dim=-1)
+            diag["final_op_entropy_mean"] = float(entropy.mean().item())
+            diag["final_op_entropy_norm_mean"] = float((entropy / math.log(max(self.nb_bonds, 2))).mean().item())
+            diag["final_op_max_prob_mean"] = float(probs.max(dim=-1).values.mean().item())
+            diag["final_op_candidate_spread"] = float((op_logits.max(dim=-1).values - op_logits.min(dim=-1).values).mean().item())
+
+        if targets is not None:
+            target_vals = targets[valid]
+            target_mask = (target_vals >= OPERATOR_OFFSET) & (target_vals < OPERATOR_OFFSET + self.nb_bonds)
+            if target_mask.any():
+                target_idx = (target_vals[target_mask] - OPERATOR_OFFSET).long()
+                target_logits = op_logits[target_mask]
+                logp = torch.log_softmax(target_logits, dim=-1)
+                nll = -logp.gather(1, target_idx.unsqueeze(1)).squeeze(1)
+                chosen = target_logits.gather(1, target_idx.unsqueeze(1))
+                ranks = (target_logits > chosen).sum(dim=1).float() + 1.0
+                diag["target_nll_mean"] = float(nll.mean().item())
+                diag["target_rank_mean"] = float(ranks.mean().item())
+                diag["target_rank_p50"] = float(torch.quantile(ranks, 0.50).item())
+                diag["target_rank_p95"] = float(torch.quantile(ranks, 0.95).item())
+
+        return diag
 
     def forward(self, x, padding_mask=None, prefix_parity=None, deltaK_prefix=None,
                 dk_candidates=None):

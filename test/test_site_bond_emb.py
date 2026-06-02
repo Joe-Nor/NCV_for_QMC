@@ -5,7 +5,7 @@ Run: python3 cyclic_aug_bias/test/test_site_bond_emb.py
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                '..', 'python', 'nh_window', 'numerator'))
+                                '..', 'python', 'train', 'numerator'))
 import torch
 import numpy as np
 from train_transformer_parity_sign_v2_pe_nh_window_aug import (
@@ -15,7 +15,7 @@ from train_transformer_parity_sign_v2_pe_nh_window_aug import (
 lx, ly = 3, -3
 bsites, nn, nb = build_bsites(lx, ly)
 bond_meta = compute_bond_metadata(bsites, nb, lx, ly)
-bond_s1, bond_s2, bond_dir_arr, num_sites, n_dir = bond_meta
+bond_s1, bond_s2, bond_dir_arr, _bond_anchor_arr, num_sites, n_dir = bond_meta
 vocab_size = nb + OPERATOR_OFFSET
 B, T = 2, 10
 

@@ -50,12 +50,12 @@ echo "Generate data:"
 echo "  mkdir -p data/raw && cd fortran && RSSE_OUTDIR=../data/raw ./rsse_update_loops_cursor_optimized_v3.x"
 echo
 echo "Train numerator even:"
-echo "  python python/nh_window/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py --parity even --data_glob '${DATA_GLOB}' --auto_nh_window 1 --output_dir checkpoints/numerator/even --num_epochs 10"
+echo "  python python/train/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py --parity even --data_glob '${DATA_GLOB}' --auto_nh_window 1 --output_dir checkpoints/numerator/even --num_epochs 10"
 echo
 echo "Train denominator even:"
-echo "  python python/nh_window/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py --parity even --data_glob '${DATA_GLOB}' --auto_nh_window 1 --output_dir checkpoints/denominator/even --num_epochs 10"
+echo "  python python/train/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py --parity even --data_glob '${DATA_GLOB}' --auto_nh_window 1 --output_dir checkpoints/denominator/even --num_epochs 10"
 echo
 echo "Evaluate after training all four parity models:"
-echo "  python python/nh_window/compute_energy_jackknife_Cov.py --data_train data/raw/train.bin --data_test data/raw/test.bin --ckpt_num_even checkpoints/numerator/even/best_model.pt --ckpt_num_odd checkpoints/numerator/odd/best_model.pt --ckpt_denom_even checkpoints/denominator/even/best_model.pt --ckpt_denom_odd checkpoints/denominator/odd/best_model.pt --device ${DEVICE}"
+echo "  python python/train/compute_energy_jackknife_Cov.py --data_train data/raw/train.bin --data_test data/raw/test.bin --ckpt_num_even checkpoints/numerator/even/best_model.pt --ckpt_num_odd checkpoints/numerator/odd/best_model.pt --ckpt_denom_even checkpoints/denominator/even/best_model.pt --ckpt_denom_odd checkpoints/denominator/odd/best_model.pt --device ${DEVICE}"
 echo
 echo "Associated paper: https://arxiv.org/abs/2605.26814"

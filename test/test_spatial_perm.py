@@ -4,14 +4,14 @@ import os
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python', 'nh_window', 'numerator'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python', 'train', 'numerator'))
 
 from parity_prefix_wrapper import compute_parity_prefix
 
 import importlib.util
 _spec = importlib.util.spec_from_file_location(
     "tps_num",
-    os.path.join(os.path.dirname(__file__), '..', 'python', 'nh_window', 'numerator',
+    os.path.join(os.path.dirname(__file__), '..', 'python', 'train', 'numerator',
                  'train_transformer_parity_sign_v2_pe_nh_window_aug.py'))
 tps = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(tps)
@@ -40,7 +40,7 @@ def _check_perm(name, perm, bsites, nn, nb, n_samples, nh_range):
     return fail == 0
 
 
-def test_lattice(lx, ly, n_samples=20, nh_range=(5, 30)):
+def _check_lattice(lx, ly, n_samples=20, nh_range=(5, 30)):
     bsites, nn, nb = tps.build_bsites(lx, ly)
     print(f"  lattice ({lx}, {ly}): nn={nn}, nb={nb}")
 
@@ -57,13 +57,20 @@ def test_lattice(lx, ly, n_samples=20, nh_range=(5, 30)):
     return ok_sp and ok_pg
 
 
+def test_spatial_perm_small():
+    """Small pytest entry point for translation and point-group permutations."""
+    # The Fortran parity wrapper keeps shared bsites state and cannot shrink
+    # after another test has initialized a larger lattice.
+    assert _check_lattice(3, -3, n_samples=5, nh_range=(2, 8))
+
+
 if __name__ == '__main__':
     print("Testing spatial bond permutation K-invariance:")
     # Run small→large because the shared Fortran module only grows bsites_w buffer.
-    ok_31 = test_lattice(3, 1)
-    ok_33 = test_lattice(3, -3)
+    ok_31 = _check_lattice(3, 1)
+    ok_33 = _check_lattice(3, -3)
     try:
-        ok_44 = test_lattice(4, -4)
+        ok_44 = _check_lattice(4, -4)
     except Exception as e:
         print(f"  4x-4 skipped: {e}")
         ok_44 = True

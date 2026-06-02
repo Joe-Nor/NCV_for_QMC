@@ -10,7 +10,7 @@ from pathlib import Path
 
 def build_command(args):
     repo = Path(__file__).resolve().parents[1]
-    script = repo / "python" / "nh_window" / "compute_energy_jackknife_Cov.py"
+    script = repo / "python" / "train" / "compute_energy_jackknife_Cov.py"
     return [
         sys.executable,
         str(script),

@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 # Add paths
 _base = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_base, "..", "src"))
-sys.path.insert(0, os.path.join(_base, "..", "python", "nh_window", "denumerator"))
+sys.path.insert(0, os.path.join(_base, "..", "python", "train", "denumerator"))
 from parity_prefix_wrapper import compute_parity_prefix
 
 import train_transformer_parity_sign_v2_pe_nh_window_de_aug as tps
