@@ -1,187 +1,61 @@
-#!/bin/bash
-# Quick reproduction script for testing the pipeline on a small system
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -e  # Exit on error
-
-echo "=========================================="
-echo "RSSE Control Variates - Quick Test"
-echo "=========================================="
-echo ""
-
-# Configuration
-LATTICE="2x2"
-BETA="8.0"
-N_SAMPLES=10000  # Small for quick test
-SEED=42
-
-# Directories
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DATA_DIR="${PROJECT_ROOT}/data"
-RAW_DIR="${DATA_DIR}/raw"
-PROCESSED_DIR="${DATA_DIR}/processed"
-CHECKPOINT_DIR="${PROJECT_ROOT}/checkpoints"
-RESULTS_DIR="${PROJECT_ROOT}/results"
+DATA_GLOB="${DATA_GLOB:-data/raw/*.bin}"
+DEVICE="${DEVICE:-cpu}"
 
-# Create directories
-mkdir -p "${RAW_DIR}" "${PROCESSED_DIR}" "${CHECKPOINT_DIR}" "${RESULTS_DIR}"
+cd "${PROJECT_ROOT}"
 
+echo "RSSE NCV quick check"
 echo "Project root: ${PROJECT_ROOT}"
-echo "Configuration:"
-echo "  Lattice: ${LATTICE}"
-echo "  Beta: ${BETA}"
-echo "  Samples: ${N_SAMPLES}"
-echo ""
+echo
 
-# Step 1: Generate MCMC data
-echo "=========================================="
-echo "Step 1: Generate MCMC Data"
-echo "=========================================="
-echo ""
+echo "[1/4] Python imports"
+python - <<'PY'
+import numpy
+import torch
+print(f"numpy={numpy.__version__}")
+print(f"torch={torch.__version__}")
+print(f"cuda_available={torch.cuda.is_available()}")
+PY
 
-FORTRAN_DIR="${PROJECT_ROOT}/fortran"
-MCMC_BINARY="${FORTRAN_DIR}/rsse_update_loops_cursor_optimized_v3.x"
-
-if [ ! -f "${MCMC_BINARY}" ]; then
-    echo "Error: MCMC sampler not found at ${MCMC_BINARY}"
-    echo "Please compile the Fortran code first:"
-    echo "  cd fortran"
-    echo "  gfortran -O3 -o rsse_update_loops_cursor_optimized_v3.x rsse_update_loops_cursor_optimized_v3.f90"
-    exit 1
-fi
-
-OUTPUT_FILE="${RAW_DIR}/${LATTICE}_beta${BETA}.bin"
-
-echo "Running MCMC sampler..."
-echo "This may take a few minutes..."
-echo ""
-
-# Note: This is a placeholder - actual MCMC input format may differ
-# Users should adjust based on their Fortran code's input requirements
-cat > "${FORTRAN_DIR}/temp_input.txt" << EOF
-${BETA}
-2
-2
-${N_SAMPLES}
-${SEED}
-${OUTPUT_FILE}
-EOF
-
-# Run MCMC (commented out - users should uncomment and adjust)
-# cd "${FORTRAN_DIR}"
-# ./rsse_update_loops_cursor_optimized_v3.x < temp_input.txt
-# rm temp_input.txt
-# cd "${PROJECT_ROOT}"
-
-echo "MCMC data generation complete (or skipped if already exists)"
-echo "Output: ${OUTPUT_FILE}"
-echo ""
-
-# Step 2: Preprocess data
-echo "=========================================="
-echo "Step 2: Preprocess Data"
-echo "=========================================="
-echo ""
-
-if [ -f "${OUTPUT_FILE}" ]; then
-    echo "Preprocessing MCMC data..."
-    # python scripts/preprocess_data.py \
-    #     --input "${OUTPUT_FILE}" \
-    #     --output "${PROCESSED_DIR}/${LATTICE}_beta${BETA}" \
-    #     --train-ratio 0.7 \
-    #     --val-ratio 0.15 \
-    #     --test-ratio 0.15 \
-    #     --seed ${SEED}
-    echo "Data preprocessing complete (or skipped)"
+echo
+echo "[2/4] Fortran helper libraries"
+if [ ! -f src/parity_prefix_lib.so ] || [ ! -f src/parity_prefix_candidates_lib.so ]; then
+  echo "Shared libraries are missing. Build them with:"
+  echo "  cd src && make"
 else
-    echo "Warning: Raw data file not found, skipping preprocessing"
+  python - <<'PY'
+import os, sys
+sys.path.insert(0, os.path.join(os.getcwd(), "src"))
+from parity_prefix_wrapper import compute_parity_prefix
+from parity_prefix_candidates_wrapper import compute_parity_prefix_candidates
+print("parity helper imports OK")
+PY
 fi
-echo ""
 
-# Step 3: Train models
-echo "=========================================="
-echo "Step 3: Train Models"
-echo "=========================================="
-echo ""
-
-TRAIN_DATA="${PROCESSED_DIR}/${LATTICE}_beta${BETA}_train.npz"
-VAL_DATA="${PROCESSED_DIR}/${LATTICE}_beta${BETA}_val.npz"
-OUTPUT_DIR="${CHECKPOINT_DIR}/${LATTICE}_beta${BETA}"
-
-if [ -f "${TRAIN_DATA}" ]; then
-    echo "Training numerator model..."
-    # python python/nh_window/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py \
-    #     --data "${TRAIN_DATA}" \
-    #     --val-data "${VAL_DATA}" \
-    #     --output "${OUTPUT_DIR}" \
-    #     --d-model 64 \
-    #     --n-heads 4 \
-    #     --n-layers 4 \
-    #     --d-ff 256 \
-    #     --batch-size 32 \
-    #     --epochs 20 \
-    #     --lr 1e-4 \
-    #     --seed ${SEED}
-
-    echo "Training denominator model..."
-    # python python/nh_window/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py \
-    #     --data "${TRAIN_DATA}" \
-    #     --val-data "${VAL_DATA}" \
-    #     --output "${OUTPUT_DIR}" \
-    #     --d-model 64 \
-    #     --n-heads 4 \
-    #     --n-layers 4 \
-    #     --d-ff 256 \
-    #     --batch-size 32 \
-    #     --epochs 20 \
-    #     --lr 1e-4 \
-    #     --seed ${SEED}
-
-    echo "Model training complete (or skipped)"
+echo
+echo "[3/4] Sampler"
+if [ ! -f fortran/rsse_update_loops_cursor_optimized_v3.x ]; then
+  echo "Sampler executable is missing. Build it with:"
+  echo "  cd fortran && gfortran -O3 -o rsse_update_loops_cursor_optimized_v3.x rsse_update_loops_cursor_optimized_v3.f90"
 else
-    echo "Warning: Training data not found, skipping model training"
+  echo "Sampler executable found: fortran/rsse_update_loops_cursor_optimized_v3.x"
 fi
-echo ""
 
-# Step 4: Compute energy with CV
-echo "=========================================="
-echo "Step 4: Compute Energy with CV"
-echo "=========================================="
-echo ""
-
-TEST_DATA="${PROCESSED_DIR}/${LATTICE}_beta${BETA}_test.npz"
-NUMERATOR_CKPT="${OUTPUT_DIR}/numerator_even.pt"
-DENOMINATOR_CKPT="${OUTPUT_DIR}/denominator_even.pt"
-RESULT_FILE="${RESULTS_DIR}/${LATTICE}_beta${BETA}_cv.json"
-
-if [ -f "${TEST_DATA}" ] && [ -f "${NUMERATOR_CKPT}" ] && [ -f "${DENOMINATOR_CKPT}" ]; then
-    echo "Computing energy with control variates..."
-    # python python/nh_window/compute_energy_jackknife.py \
-    #     --test-data "${TEST_DATA}" \
-    #     --numerator-ckpt "${NUMERATOR_CKPT}" \
-    #     --denominator-ckpt "${DENOMINATOR_CKPT}" \
-    #     --output "${RESULT_FILE}" \
-    #     --n-blocks 10 \
-    #     --seed ${SEED}
-
-    echo "Energy computation complete (or skipped)"
-else
-    echo "Warning: Required files not found, skipping energy computation"
-fi
-echo ""
-
-# Summary
-echo "=========================================="
-echo "Quick Test Complete"
-echo "=========================================="
-echo ""
-echo "Note: This script contains placeholders for the actual commands."
-echo "Uncomment the relevant lines and adjust paths as needed."
-echo ""
-echo "Expected outputs:"
-echo "  - Raw data: ${RAW_DIR}/"
-echo "  - Processed data: ${PROCESSED_DIR}/"
-echo "  - Checkpoints: ${CHECKPOINT_DIR}/"
-echo "  - Results: ${RESULTS_DIR}/"
-echo ""
-echo "For full reproduction, see: docs/reproducibility.md"
-echo "=========================================="
+echo
+echo "[4/4] Command templates"
+echo "Generate data:"
+echo "  mkdir -p data/raw && cd fortran && RSSE_OUTDIR=../data/raw ./rsse_update_loops_cursor_optimized_v3.x"
+echo
+echo "Train numerator even:"
+echo "  python python/nh_window/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py --parity even --data_glob '${DATA_GLOB}' --auto_nh_window 1 --output_dir checkpoints/numerator/even --num_epochs 10"
+echo
+echo "Train denominator even:"
+echo "  python python/nh_window/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py --parity even --data_glob '${DATA_GLOB}' --auto_nh_window 1 --output_dir checkpoints/denominator/even --num_epochs 10"
+echo
+echo "Evaluate after training all four parity models:"
+echo "  python python/nh_window/compute_energy_jackknife_Cov.py --data_train data/raw/train.bin --data_test data/raw/test.bin --ckpt_num_even checkpoints/numerator/even/best_model.pt --ckpt_num_odd checkpoints/numerator/odd/best_model.pt --ckpt_denom_even checkpoints/denominator/even/best_model.pt --ckpt_denom_odd checkpoints/denominator/odd/best_model.pt --device ${DEVICE}"
+echo
+echo "Associated paper: https://arxiv.org/abs/2605.26814"

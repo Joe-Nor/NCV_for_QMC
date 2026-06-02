@@ -200,10 +200,11 @@ To avoid numerical issues:
 
 ## References
 
-For more details on the theoretical foundation and algorithmic implementation, please refer to the accompanying paper.
+For more details on the theoretical foundation and algorithmic implementation,
+please refer to the accompanying paper:
+[Neural Autoregressive Control Variates for the Quantum Monte Carlo Sign Problem](https://arxiv.org/abs/2605.26814).
 
 ## Next Steps
 
 - [Data Format Specification](data_format.md)
-- [Reproducing Paper Results](reproducibility.md)
-- [API Documentation](api.md)
+- [Associated arXiv Paper](https://arxiv.org/abs/2605.26814)

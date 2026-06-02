@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
-"""Check stored parity vs Fortran-recomputed values (V4 format: no K in file)."""
-import struct, numpy as np, sys, os
+"""Check stored parity vs Fortran-recomputed values."""
+import argparse
+import os
+import struct
+import sys
+
+import numpy as np
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src'))
 from parity_prefix_wrapper import compute_parity_prefix
 
@@ -10,7 +16,18 @@ bsites[0,0]=1; bsites[1,0]=2
 bsites[0,1]=2; bsites[1,1]=3
 bsites[0,2]=3; bsites[1,2]=1
 
-path = "/home/user_beiqiao/private/datafile/rsse_data/fortran3_aug/3x1/beta10/train/rsse_L3x1_beta10.000_seed4102_M57.bin"
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--data",
+    default=os.environ.get("RSSE_SAMPLE_PATH"),
+    help="Path to an RSSE binary sample file. Defaults to RSSE_SAMPLE_PATH.",
+)
+args = parser.parse_args()
+
+if not args.data:
+    raise SystemExit("Provide --data or set RSSE_SAMPLE_PATH.")
+
+path = args.data
 mp, total = 0, 0
 
 with open(path, "rb") as f:

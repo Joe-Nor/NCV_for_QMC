@@ -5,8 +5,8 @@ Verify parity_prefix_candidates_lib against brute-force computation.
 Brute-force: at each position t, for each candidate bond b, call
 compute_parity_prefix on prefix[0:t] + [2*b] and read the last deltaK.
 
-Usage (on server):
-    cd /home/user_beiqiao/private/homefile/rsse_tri/cyclic_aug_bias/src
+Usage:
+    cd src
     make clean && make
     cd ../test
     python3 test_candidates_lib.py

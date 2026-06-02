@@ -1,6 +1,10 @@
-# RSSE Control Variates for Quantum Monte Carlo
+# Neural Autoregressive Control Variates for RSSE Quantum Monte Carlo
 
-Transformer-based control variates for mitigating the sign problem in quantum Monte Carlo simulations using the RSSE (Resummation-based Stochastic Series Expansion) method.
+Code accompanying the paper
+[Neural Autoregressive Control Variates for the Quantum Monte Carlo Sign Problem](https://arxiv.org/abs/2605.26814).
+The repository implements autoregressive neural-network control variates for
+variance reduction in sign-problem quantum Monte Carlo simulations using the
+RSSE (Resummation-based Stochastic Series Expansion) method.
 
 ## Overview
 
@@ -24,8 +28,8 @@ This repository contains the implementation of neural network control variates f
 ### Setup
 ```bash
 # Clone repository
-git clone https://github.com/username/rsse-control-variates.git
-cd rsse-control-variates
+git clone https://github.com/Joe-Nor/NCV_for_QMC.git
+cd NCV_for_QMC
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -37,7 +41,7 @@ cd ..
 
 # Compile Fortran MCMC sampler
 cd fortran
-gfortran -O3 -o rsse_sampler rsse_update_loops_cursor_optimized_v3.f90
+gfortran -O3 -o rsse_update_loops_cursor_optimized_v3.x rsse_update_loops_cursor_optimized_v3.f90
 cd ..
 ```
 
@@ -45,30 +49,53 @@ cd ..
 
 ### 1. Generate MCMC data
 ```bash
-cd src/fortran
-./rsse_sampler --lattice 2x2 --beta 8.0 --samples 100000 --output ../../data/sample/
+mkdir -p data/raw
+cd fortran
+RSSE_OUTDIR=../data/raw ./rsse_update_loops_cursor_optimized_v3.x
+cd ..
 ```
+
+The sampler reads `fortran/rsse_input.in` and `fortran/seed.in`.
 
 ### 2. Train models
 ```bash
 # Train numerator model (even parity)
 python python/nh_window/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py \
-    --data data/sample/train.npz \
-    --output checkpoints/2x2_beta8.0/
+    --parity even \
+    --data_glob "data/raw/*.bin" \
+    --auto_nh_window 1 \
+    --output_dir checkpoints/numerator/even
 
-# Train denominator model
+# Train numerator model (odd parity)
+python python/nh_window/numerator/train_transformer_parity_sign_v2_pe_nh_window_aug.py \
+    --parity odd \
+    --data_glob "data/raw/*.bin" \
+    --auto_nh_window 1 \
+    --output_dir checkpoints/numerator/odd
+
+# Train denominator models
 python python/nh_window/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py \
-    --data data/sample/train.npz \
-    --output checkpoints/2x2_beta8.0/
+    --parity even \
+    --data_glob "data/raw/*.bin" \
+    --auto_nh_window 1 \
+    --output_dir checkpoints/denominator/even
+
+python python/nh_window/denumerator/train_transformer_parity_sign_v2_pe_nh_window_de_aug.py \
+    --parity odd \
+    --data_glob "data/raw/*.bin" \
+    --auto_nh_window 1 \
+    --output_dir checkpoints/denominator/odd
 ```
 
 ### 3. Evaluate control variates
 ```bash
-python python/nh_window/compute_energy_jackknife.py \
-    --test-data data/sample/test.npz \
-    --numerator-ckpt checkpoints/2x2_beta8.0/numerator_even.pt \
-    --denominator-ckpt checkpoints/2x2_beta8.0/denominator_even.pt \
-    --output results/energy.json
+python python/nh_window/compute_energy_jackknife_Cov.py \
+    --data_train data/raw/train.bin \
+    --data_test data/raw/test.bin \
+    --ckpt_num_even checkpoints/numerator/even/best_model.pt \
+    --ckpt_num_odd checkpoints/numerator/odd/best_model.pt \
+    --ckpt_denom_even checkpoints/denominator/even/best_model.pt \
+    --ckpt_denom_odd checkpoints/denominator/odd/best_model.pt
 ```
 
 ## Documentation
@@ -76,25 +103,23 @@ python python/nh_window/compute_energy_jackknife.py \
 - [Installation Guide](docs/installation.md)
 - [Method Description](docs/method.md)
 - [Data Format Specification](docs/data_format.md)
-- [Reproducing Paper Results](docs/reproducibility.md)
-
-## Pre-trained Checkpoints
-
-Pre-trained models for various lattice sizes and temperatures are available:
-- [Download from Zenodo](https://zenodo.org/record/XXXXXX)
-
-See [checkpoints/README.md](checkpoints/README.md) for details.
+- [Public Checkpoint Preparation](docs/checkpoints.md)
+- [Associated arXiv paper](https://arxiv.org/abs/2605.26814)
 
 ## Citation
 
-If you use this code in your research, please cite:
+If you use this code in your research, please cite the accompanying paper:
 
 ```bibtex
-@article{yourname2026rsse,
-  title={Transformer-based Control Variates for Quantum Monte Carlo Sign Problem},
-  author={Your Name and Collaborators},
-  journal={arXiv preprint arXiv:XXXX.XXXXX},
-  year={2026}
+@misc{qiao2026neuralautoregressivecontrolvariates,
+  title         = {Neural Autoregressive Control Variates for the Quantum Monte Carlo Sign Problem},
+  author        = {Bei Qiao and Lei Wang},
+  year          = {2026},
+  eprint        = {2605.26814},
+  archivePrefix = {arXiv},
+  primaryClass  = {cond-mat.str-el},
+  doi           = {10.48550/arXiv.2605.26814},
+  url           = {https://arxiv.org/abs/2605.26814}
 }
 ```
 
@@ -104,8 +129,8 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ## Contact
 
-For questions or issues, please open a GitHub issue or contact [your.email@institution.edu](mailto:your.email@institution.edu).
+For questions or issues, please open a GitHub issue.
 
 ## Acknowledgments
 
-This work was supported by [funding sources].
+See the accompanying paper for acknowledgments and funding information.

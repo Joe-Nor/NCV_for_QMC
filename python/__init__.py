@@ -1,8 +1,8 @@
 """RSSE Control Variates package for quantum Monte Carlo simulations."""
 
 __version__ = "1.0.0"
-__author__ = "Your Name"
-__email__ = "your.email@institution.edu"
+__author__ = "Bei Qiao and contributors"
+__email__ = ""
 
 # Package metadata
 __all__ = [

@@ -22,8 +22,8 @@ The following Python packages are required:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/rsse-control-variates.git
-cd rsse-control-variates
+git clone https://github.com/Joe-Nor/NCV_for_QMC.git
+cd NCV_for_QMC
 ```
 
 ### 2. Set Up Python Environment
@@ -56,7 +56,7 @@ The Makefile should compile the Fortran libraries and create Python-callable sha
 #### Compile the MCMC sampler:
 ```bash
 cd fortran
-gfortran -O3 -o rsse_sampler rsse_update_loops_cursor_optimized_v3.f90
+gfortran -O3 -o rsse_update_loops_cursor_optimized_v3.x rsse_update_loops_cursor_optimized_v3.f90
 cd ..
 ```
 
@@ -71,7 +71,8 @@ python -c "import torch; import numpy; print('Installation successful!')"
 Test the Fortran sampler:
 ```bash
 cd fortran
-./rsse_sampler
+mkdir -p ../data/raw
+RSSE_OUTDIR=../data/raw ./rsse_update_loops_cursor_optimized_v3.x
 cd ..
 ```
 
@@ -134,4 +135,4 @@ conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvi
 After successful installation, proceed to:
 - [Quick Start Guide](../README.md#quick-start)
 - [Method Description](method.md)
-- [Reproducing Paper Results](reproducibility.md)
+- [Associated arXiv Paper](https://arxiv.org/abs/2605.26814)

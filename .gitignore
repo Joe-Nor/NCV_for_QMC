@@ -24,6 +24,7 @@ wheels/
 *.pt
 *.pth
 *.ckpt
+public_checkpoints/
 
 # Data
 *.bin
@@ -34,12 +35,18 @@ wheels/
 # Logs
 *.log
 *.out
+*.err
 slurm-*.out
+logs/
 
 # Fortran
 *.o
 *.mod
 *.a
+*.x
+fortran/rsse_twist_stats
+fortran/rsse_results.txt
+fortran/logs/
 
 # IDE
 .vscode/

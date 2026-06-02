@@ -268,13 +268,13 @@ def ed_report_sectors(beta, nn, bonds, evals_cache):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--lx", type=int, default=3)
-    ap.add_argument("--ly", type=int, default=3)
+    ap.add_argument("--lx", type=int, default=2)
+    ap.add_argument("--ly", type=int, default=2)
     ap.add_argument("--open", action="store_true",
                     help="Use 3-site open triangle (lx=3, ly=1 legacy)")
-    ap.add_argument("--beta_min", type=float, default=0.5)
-    ap.add_argument("--beta_max", type=float, default=5.0)
-    ap.add_argument("--beta_steps", type=int, default=19)
+    ap.add_argument("--beta_min", type=float, default=3)
+    ap.add_argument("--beta_max", type=float, default=8)
+    ap.add_argument("--beta_steps", type=int, default=11)
     ap.add_argument("--sector_threshold", type=int, default=12,
                     help="Use S_z sectors when nn > this value (default 12)")
     args = ap.parse_args()

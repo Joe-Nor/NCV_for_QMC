@@ -14,9 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Autoregressive models with parity prefix embeddings
 - Jackknife-based variance reduction estimation
 - Support for 2×2 and 3×1 lattice geometries
-- Complete documentation and examples
-- Pre-trained model checkpoints
-- Reproducibility scripts for paper results
+- Documentation and command templates for data generation, training, and evaluation
+- Guidance for archiving paper-scale data and checkpoints outside git
 
 ### Features
 - **Models**
@@ -92,14 +91,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Release Notes
 
 #### [1.0.0] - 2026-05-18
-First public release accompanying the paper:
-"Transformer-based Control Variates for Quantum Monte Carlo Sign Problem"
+First public release accompanying the arXiv paper:
+"Neural Autoregressive Control Variates for the Quantum Monte Carlo Sign Problem"
 
 Key achievements:
 - Demonstrated 60-80% variance reduction on test systems
 - Validated against exact diagonalization results
-- Provided complete reproducibility pipeline
-- Released pre-trained models and datasets
+- Provided source code for the RSSE sampler, neural control-variate models, and jackknife evaluation
+- Prepared the repository for external data and checkpoint archival
 
 ---
 

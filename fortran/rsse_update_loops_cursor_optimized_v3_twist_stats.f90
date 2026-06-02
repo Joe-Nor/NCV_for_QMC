@@ -205,6 +205,7 @@
  integer :: use_rsse_flag
  integer :: Kalpha
  integer :: sample_idx, save_every
+ integer :: env_status
  real(8), external :: ran
 
  character(len=512) :: outdir, fname
@@ -260,7 +261,8 @@
  ! Change save_every to thin the chain (e.g., 5, 10, ...).
  save_every = 1
  sample_idx = 0
- outdir = "/home/user_beiqiao/private/datafile/rsse_data/fortran3_aug_bias/3x1/beta10/train"
+ call get_environment_variable("RSSE_OUTDIR", outdir, status=env_status)
+ if (env_status /= 0 .or. len_trim(outdir) == 0) outdir = "../data/raw"
 
  write(fname,'(a,"/rsse_L",i0,"x",i0,"_beta",f0.3,"_seed",i0,"_M",i0,".bin")') &
      trim(outdir), lx, ly, beta, seed0, mm

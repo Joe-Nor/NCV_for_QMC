@@ -8,7 +8,7 @@ Thank you for your interest in contributing! This document provides guidelines f
 
 If you find a bug or have a feature request:
 
-1. Check if the issue already exists in the [issue tracker](https://github.com/yourusername/rsse-control-variates/issues)
+1. Check if the issue already exists in the [issue tracker](https://github.com/Joe-Nor/NCV_for_QMC/issues)
 2. If not, create a new issue with:
    - Clear description of the problem or feature
    - Steps to reproduce (for bugs)
@@ -20,8 +20,8 @@ If you find a bug or have a feature request:
 
 1. **Fork the repository**
    ```bash
-   git clone https://github.com/yourusername/rsse-control-variates.git
-   cd rsse-control-variates
+   git clone https://github.com/Joe-Nor/NCV_for_QMC.git
+   cd NCV_for_QMC
    ```
 
 2. **Create a branch**

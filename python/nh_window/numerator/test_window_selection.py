@@ -4,25 +4,27 @@ Test n_h window selection for numerator training.
 Analyze n_h * count distribution to determine optimal window.
 """
 
+import argparse
+import os
 import struct
 import numpy as np
 from typing import Dict, Tuple
 
 
 def scan_nh_histogram(filepath: str) -> Dict:
-    """Scan n_h histogram from V2 or V3 binary file."""
+    """Scan n_h histogram from V2, V3, or V4 binary file."""
     hist = {}
     nh_values = []
 
     with open(filepath, 'rb') as f:
         # Read header
         magic = f.read(4)
-        if magic not in (b"RSSE", b"RSS3"):
+        if magic not in (b"RSSE", b"RSS3", b"RSS4"):
             raise ValueError(f"Invalid magic: {magic}")
 
         version = struct.unpack("<i", f.read(4))[0]
-        if version not in (2, 3):
-            raise ValueError(f"Only V2/V3 format supported, got version {version}")
+        if version not in (2, 3, 4):
+            raise ValueError(f"Only V2/V3/V4 format supported, got version {version}")
         fmt_version = version
 
         lx, ly, nn, nb, mm = struct.unpack("<5i", f.read(20))
@@ -41,12 +43,12 @@ def scan_nh_histogram(filepath: str) -> Dict:
 
             nh = struct.unpack("<i", nh_bytes)[0]
 
-            # V2: skip K (4) + parity_prefix (nh) + opstring (4*nh)
-            # V3: skip K (4) + parity (4) + opstring (4*nh)
             if fmt_version == 2:
                 skip_bytes = 4 + nh + 4 * nh
-            else:
+            elif fmt_version == 3:
                 skip_bytes = 4 + 4 + 4 * nh
+            else:
+                skip_bytes = 4 + 4 * nh
             f.seek(skip_bytes, 1)
 
             hist[nh] = hist.get(nh, 0) + 1
@@ -93,7 +95,16 @@ def choose_window(hist: Dict[int, int], tail_mass: float) -> Tuple[int, int]:
 
 
 def main():
-    filepath = "/home/user_beiqiao/private/datafile/rsse_data/fortran3/3x1/beta10/train/rsse_L3x1_beta10.000_seed3102_M57.bin"
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data",
+        default=os.environ.get("RSSE_SAMPLE_PATH"),
+        help="Path to an RSSE binary sample file. Defaults to RSSE_SAMPLE_PATH.",
+    )
+    args = parser.parse_args()
+    if not args.data:
+        raise SystemExit("Provide --data or set RSSE_SAMPLE_PATH.")
+    filepath = args.data
 
     print("Scanning n_h distribution...\n")
     stats = scan_nh_histogram(filepath)

@@ -242,22 +242,12 @@ def test_cyclic_parity_invariance(samples, bsites, nn, nb, max_shifts=5):
 
 
 def main():
-    # Try both local (WSL) and server paths
-    # Allow command-line override
     if len(sys.argv) > 1:
-        candidates = [sys.argv[1]]
+        data_path = sys.argv[1]
     else:
-        candidates = [
-            '/home/q1596925184/py/private/datafile/rsse_data/fortran3/3x1/beta10/train/rsse_L3x1_beta10.000_seed3102_M57.bin',
-            '/home/user_beiqiao/private/datafile/rsse_data/fortran3/3x1/beta10/train/rsse_L3x1_beta10.000_seed3102_M57.bin',
-        ]
-    data_path = None
-    for p in candidates:
-        if os.path.exists(p):
-            data_path = p
-            break
-    if data_path is None:
-        print(f"Data file not found. Tried: {candidates}")
+        data_path = os.environ.get("RSSE_SAMPLE_PATH")
+    if not data_path:
+        print("Data file not provided. Pass a path or set RSSE_SAMPLE_PATH.")
         sys.exit(1)
 
     if not os.path.exists(data_path):

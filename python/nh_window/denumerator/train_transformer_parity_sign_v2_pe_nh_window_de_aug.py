@@ -1038,47 +1038,12 @@ def apply_nh_window_mask(logits, prefix_len, prefix_parity, target_parity,
     return logits
 
 
-# ============================================================================
-# Density-ratio flatness helpers
-# ============================================================================
-
-def precompute_logfact_table(M):
-    """Precompute log(n!) for n = 0..M as a float32 tensor."""
-    return torch.tensor([math.lgamma(n + 1.0) for n in range(M + 1)], dtype=torch.float32)
-
-
-def compute_logf_batch(raw_samples, beta, logfact_table, device):
-    """Compute log f(D) = K*log(2) + nh*log(beta/2) - log(nh!) for each sample."""
-    nh = torch.tensor([s['nh'] for s in raw_samples], dtype=torch.long, device=device)
-    K = torch.tensor([s['K'] for s in raw_samples], dtype=torch.float32, device=device)
-    logfact = logfact_table.to(device)
-    log_beta_half = math.log(beta / 2.0)
-    return K * math.log(2.0) + nh.float() * log_beta_half - logfact[nh]
-
-
-def compute_ratio_flatness_loss(logq, logf, min_batch=8):
-    """Compute log(E[(q/f)^2] / E[q/f]^2), penalizing q/f variance.
-
-    Numerically stable via logsumexp. Returns (loss_tensor, n_finite).
-    """
-    z = logq - logf
-    finite = torch.isfinite(z)
-    z_clean = z[finite]
-    n = z_clean.numel()
-    if n < min_batch:
-        return z.new_zeros(()), n
-    log_m1 = torch.logsumexp(z_clean, dim=0) - math.log(n)
-    log_m2 = torch.logsumexp(2.0 * z_clean, dim=0) - math.log(n)
-    return log_m2 - 2.0 * log_m1, n
-
 
 # ============================================================================
 # Training and Evaluation
 # ============================================================================
 
-def compute_loss(model, batch, target_parity, pad_id, device, nmin, nmax,
-                 beta=0.0, logfact_table=None, ce_reduction='token_mean',
-                 lambda_flat=0.0, flat_min_batch=8):
+def compute_loss(model, batch, target_parity, pad_id, device, nmin, nmax):
     """Compute cross-entropy loss with n_h window masking."""
     tokens, padding_mask, batch_parity, prefix_parity, prefix_len, deltaK_prefix, dk_candidates, raw_samples = batch
 
@@ -1118,11 +1083,8 @@ def compute_loss(model, batch, target_parity, pad_id, device, nmin, nmax,
     seq_nll = (ce * valid_mask.float()).sum(dim=1)   # (B,)
     n_valid = valid_mask.float().sum()
 
-    # CE loss with selected reduction
-    if ce_reduction == 'seq_mean':
-        loss_ce = seq_nll.mean()
-    else:  # token_mean (default, backward compat)
-        loss_ce = ce.sum() / n_valid.clamp_min(1)
+    # CE loss
+    loss_ce = ce.sum() / n_valid.clamp_min(1)
 
     # Per-component CE diagnostics (operator vs EOS)
     op_mask = (targets >= OPERATOR_OFFSET) & valid_mask
@@ -1132,40 +1094,9 @@ def compute_loss(model, batch, target_parity, pad_id, device, nmin, nmax,
     n_op = int(op_mask.sum().item())
     n_eos = int(eos_mask.sum().item())
 
-    # Density-ratio flatness loss: L_flat = log E[(q/f)^2] - 2 log E[q/f]
-    loss_flat = torch.zeros((), device=device)
-    loss_flat_val = 0.0
-    n_finite_z = 0
-    z_stats = {}
-    if logfact_table is not None:
-        logq = -seq_nll                                          # (B,)
-        logf = compute_logf_batch(raw_samples, beta, logfact_table, device)  # (B,)
-        with torch.no_grad():
-            z_det = logq.detach() - logf
-            finite = torch.isfinite(z_det)
-            z_clean = z_det[finite]
-            n_finite_z = z_clean.numel()
-            if n_finite_z > 0:
-                z_stats = {
-                    'z_mean': z_clean.mean().item(),
-                    'z_std': z_clean.std().item() if n_finite_z > 1 else 0.0,
-                    'z_max': z_clean.max().item(),
-                }
-                # Always compute flat value for diagnostics
-                with torch.no_grad():
-                    log_m1 = torch.logsumexp(z_clean, dim=0) - math.log(n_finite_z)
-                    log_m2 = torch.logsumexp(2.0 * z_clean, dim=0) - math.log(n_finite_z)
-                    z_stats['flat_diag'] = (log_m2 - 2.0 * log_m1).item()
-        if lambda_flat > 0.0:
-            loss_flat, n_finite_z = compute_ratio_flatness_loss(logq, logf, flat_min_batch)
-            loss_flat_val = loss_flat.item()
-
-    total_loss = loss_ce + lambda_flat * loss_flat
-
     return {
-        "loss": total_loss,
+        "loss": loss_ce,
         "loss_ce": loss_ce.item(),
-        "loss_flat": loss_flat_val,
         "token_loss": loss_ce.item(),
         "op_ce": op_ce,
         "eos_ce": eos_ce,
@@ -1174,42 +1105,25 @@ def compute_loss(model, batch, target_parity, pad_id, device, nmin, nmax,
         "weight": n_valid.item(),
         "mean_seq_nll": seq_nll.mean().item(),
         "mean_token_nll": (ce.sum() / n_valid.clamp_min(1)).item(),
-        "z_mean": z_stats.get('z_mean', 0.0),
-        "z_std": z_stats.get('z_std', 0.0),
-        "z_max": z_stats.get('z_max', 0.0),
-        "flat_diag": z_stats.get('flat_diag', 0.0),
-        "n_finite_z": n_finite_z,
         "batch_size": B,
     }
 
 
-def train_epoch(model, dataloader, optimizer, target_parity, pad_id, device, nmin, nmax,
-                beta=0.0, logfact_table=None, ce_reduction='token_mean',
-                lambda_flat=0.0, flat_min_batch=8, epoch=0, flat_warmup_epochs=50,
-                global_step=0, grad_accum_steps=1):
+def train_epoch(model, dataloader, optimizer, target_parity, pad_id, device, nmin, nmax):
     model.train()
     acc = {k: 0.0 for k in ["loss", "weight",
                              "op_ce", "eos_ce", "n_op", "n_eos",
-                             "loss_ce_sum", "loss_flat_sum", "flat_diag_sum",
+                             "loss_ce_sum",
                              "n_batches", "seq_nll_sum", "token_nll_sum",
-                             "z_mean_sum", "z_std_sum", "z_max_max",
                              "n_samples"]}
-    acc["z_max_max"] = float("-inf")
 
-    optimizer.zero_grad(set_to_none=True)
-    for i, batch in enumerate(dataloader):
-        lambda_eff = 0.0 if epoch < flat_warmup_epochs else lambda_flat
+    for batch in dataloader:
+        r = compute_loss(model, batch, target_parity, pad_id, device, nmin, nmax)
+        r["loss"].backward()
 
-        r = compute_loss(model, batch, target_parity, pad_id, device, nmin, nmax,
-                         beta=beta, logfact_table=logfact_table, ce_reduction=ce_reduction,
-                         lambda_flat=lambda_eff, flat_min_batch=flat_min_batch)
-        (r["loss"] / grad_accum_steps).backward()
-
-        if (i + 1) % grad_accum_steps == 0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
-            global_step += 1
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
 
         w = r["weight"]
         bs = r["batch_size"]
@@ -1220,57 +1134,35 @@ def train_epoch(model, dataloader, optimizer, target_parity, pad_id, device, nmi
         acc["n_op"] += r["n_op"]
         acc["n_eos"] += r["n_eos"]
         acc["loss_ce_sum"] += r["loss_ce"] * bs
-        acc["loss_flat_sum"] += r["loss_flat"] * bs
-        acc["flat_diag_sum"] += r["flat_diag"] * bs
         acc["n_batches"] += 1
         acc["seq_nll_sum"] += r["mean_seq_nll"] * bs
         acc["token_nll_sum"] += r["mean_token_nll"] * bs
-        acc["z_mean_sum"] += r["z_mean"] * bs
-        acc["z_std_sum"] += r["z_std"] * bs
-        if r["z_max"] != 0.0:
-            acc["z_max_max"] = max(acc["z_max_max"], r["z_max"])
         acc["n_samples"] += bs
 
-    # Flush remaining accumulated gradients
-    if (i + 1) % grad_accum_steps != 0:
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
-        optimizer.zero_grad(set_to_none=True)
-        global_step += 1
-
     if acc["weight"] == 0:
-        raise ValueError("Train dataloader produced zero valid tokens.")
+        raise ValueError("Train dataloader produced zero weight.")
     ns = max(acc["n_samples"], 1)
     return {
         "token_loss": acc["loss"] / acc["weight"],
         "op_ce": acc["op_ce"] / acc["n_op"] if acc["n_op"] > 0 else 0.0,
         "eos_ce": acc["eos_ce"] / acc["n_eos"] if acc["n_eos"] > 0 else 0.0,
         "loss_ce": acc["loss_ce_sum"] / ns,
-        "loss_flat": acc["loss_flat_sum"] / ns,
-        "flat_diag": acc["flat_diag_sum"] / ns,
         "mean_seq_nll": acc["seq_nll_sum"] / ns,
         "mean_token_nll": acc["token_nll_sum"] / ns,
-        "z_mean": acc["z_mean_sum"] / ns,
-        "z_std": acc["z_std_sum"] / ns,
-        "z_max": acc["z_max_max"] if acc["z_max_max"] != float("-inf") else 0.0,
-    }, global_step
-def evaluate(model, dataloader, target_parity, pad_id, device, nmin, nmax,
-             beta=0.0, logfact_table=None, ce_reduction='token_mean',
-             lambda_flat=0.0, flat_min_batch=8):
+    }
+
+
+def evaluate(model, dataloader, target_parity, pad_id, device, nmin, nmax):
     model.eval()
     acc = {k: 0.0 for k in ["loss", "weight",
                              "op_ce", "eos_ce", "n_op", "n_eos",
-                             "loss_ce_sum", "loss_flat_sum", "flat_diag_sum",
+                             "loss_ce_sum",
                              "n_batches", "seq_nll_sum", "token_nll_sum",
-                             "z_mean_sum", "z_std_sum", "z_max_max",
                              "n_samples"]}
-    acc["z_max_max"] = float("-inf")
 
     with torch.inference_mode():
         for batch in dataloader:
-            r = compute_loss(model, batch, target_parity, pad_id, device, nmin, nmax,
-                             beta=beta, logfact_table=logfact_table, ce_reduction=ce_reduction,
-                             lambda_flat=lambda_flat, flat_min_batch=flat_min_batch)
+            r = compute_loss(model, batch, target_parity, pad_id, device, nmin, nmax)
             w = r["weight"]
             bs = r["batch_size"]
             acc["loss"] += r["token_loss"] * w
@@ -1280,32 +1172,21 @@ def evaluate(model, dataloader, target_parity, pad_id, device, nmin, nmax,
             acc["n_op"] += r["n_op"]
             acc["n_eos"] += r["n_eos"]
             acc["loss_ce_sum"] += r["loss_ce"] * bs
-            acc["loss_flat_sum"] += r["loss_flat"] * bs
-            acc["flat_diag_sum"] += r["flat_diag"] * bs
             acc["n_batches"] += 1
             acc["seq_nll_sum"] += r["mean_seq_nll"] * bs
             acc["token_nll_sum"] += r["mean_token_nll"] * bs
-            acc["z_mean_sum"] += r["z_mean"] * bs
-            acc["z_std_sum"] += r["z_std"] * bs
-            if r["z_max"] != 0.0:
-                acc["z_max_max"] = max(acc["z_max_max"], r["z_max"])
             acc["n_samples"] += bs
 
     if acc["weight"] == 0:
-        raise ValueError("Val dataloader produced zero valid tokens.")
+        raise ValueError("Val dataloader produced zero weight.")
     ns = max(acc["n_samples"], 1)
     return {
         "token_loss": acc["loss"] / acc["weight"],
         "op_ce": acc["op_ce"] / acc["n_op"] if acc["n_op"] > 0 else 0.0,
         "eos_ce": acc["eos_ce"] / acc["n_eos"] if acc["n_eos"] > 0 else 0.0,
         "loss_ce": acc["loss_ce_sum"] / ns,
-        "loss_flat": acc["loss_flat_sum"] / ns,
-        "flat_diag": acc["flat_diag_sum"] / ns,
         "mean_seq_nll": acc["seq_nll_sum"] / ns,
         "mean_token_nll": acc["token_nll_sum"] / ns,
-        "z_mean": acc["z_mean_sum"] / ns,
-        "z_std": acc["z_std_sum"] / ns,
-        "z_max": acc["z_max_max"] if acc["z_max_max"] != float("-inf") else 0.0,
     }
 
 
@@ -1318,7 +1199,7 @@ def main():
 
     parser.add_argument('--parity', type=str, required=True, choices=['even', 'odd'])
     parser.add_argument('--data_glob', type=str,
-                        default='/home/user_beiqiao/private/datafile/rsse_data/fortran2/*.bin')
+                        default='data/raw/*.bin')
     parser.add_argument('--max_files', type=int, default=None)
     parser.add_argument('--max_samples_per_file', type=int, default=None)
     parser.add_argument('--allow_mixed_mm', type=int, default=0)
@@ -1374,27 +1255,10 @@ def main():
                              'input. 0 disables (default). When >0, MLP sees '
                              '[h ; e(ΔK_b) ; e(b)] so it can differentiate bonds within '
                              'the same ΔK class. Symmetry relies on sppg+cyclic aug.')
-    parser.add_argument('--output_dir', type=str, default='./checkpoints_v2_nh_window')
-
-    # Flatness loss parameters
-    parser.add_argument('--ce_reduction', type=str, default='token_mean',
-                        choices=['token_mean', 'seq_mean'],
-                        help='CE reduction: token_mean (default) or seq_mean (per-sequence average).')
-    parser.add_argument('--lambda_flat', type=float, default=0.0,
-                        help='Weight for density-ratio flatness loss (0=disabled).')
-    parser.add_argument('--flat_warmup_epochs', type=int, default=50,
-                        help='Number of epochs before enabling flatness loss.')
-    parser.add_argument('--flat_min_batch', type=int, default=8,
-                        help='Minimum finite z samples per batch to compute flatness loss.')
-    parser.add_argument('--early_stop_metric', type=str, default='ce',
-                        choices=['ce', 'total'],
-                        help='Metric for early stopping: ce (CE only) or total (CE + flat).')
-    parser.add_argument('--grad_accum_steps', type=int, default=1,
-                        help='Gradient accumulation steps (>1 stabilizes flat loss).')
     parser.add_argument('--train_nmax', type=int, default=None,
                         help='Dataset-level upper nh cutoff: samples with nh > train_nmax '
-                             'are skipped during training. Does not affect model masking '
-                             '(use with manual_nmax=None for soft cutoff).')
+                             'are excluded. -1 = use auto nmax from scan.')
+    parser.add_argument('--output_dir', type=str, default='./checkpoints_v2_nh_window')
 
     args = parser.parse_args()
 
@@ -1595,20 +1459,6 @@ def main():
     best_val_loss = float('inf')
     patience_counter = 0
     best_epoch = 0
-    global_step = 0
-
-    # Flatness loss setup
-    logfact_table = precompute_logfact_table(args.max_len + 10)
-    flat_kwargs = dict(
-        beta=beta, logfact_table=logfact_table, ce_reduction=args.ce_reduction,
-        lambda_flat=args.lambda_flat, flat_min_batch=args.flat_min_batch,
-    )
-    if args.lambda_flat > 0:
-        print(f"Flatness loss enabled: lambda_flat={args.lambda_flat}, "
-              f"warmup={args.flat_warmup_epochs} epochs, ce_reduction={args.ce_reduction}")
-    elif args.ce_reduction != 'token_mean':
-        print(f"CE reduction: {args.ce_reduction}")
-    print(f"Early stop metric: {args.early_stop_metric}\n")
 
     # First-batch telescope self-check on the (B,T,V) tensor:
     #   Σ_{t=0..nh-1} tensor[b_idx, t, OPERATOR_OFFSET+b_t] == K - nn.
@@ -1642,43 +1492,20 @@ def main():
     for epoch in range(args.num_epochs):
         train_dataset._epoch = epoch  # Different shuffle + augmentation each epoch
 
-        tm, global_step = train_epoch(model, train_loader, optimizer, target_parity,
-                                      PAD_ID, device, nmin, nmax,
-                                      flat_warmup_epochs=args.flat_warmup_epochs,
-                                      epoch=epoch, global_step=global_step,
-                                      grad_accum_steps=args.grad_accum_steps,
-                                      **flat_kwargs)
-        vm = evaluate(model, val_loader, target_parity, PAD_ID, device, nmin, nmax,
-                      **flat_kwargs)
+        tm = train_epoch(model, train_loader, optimizer, target_parity,
+                        PAD_ID, device, nmin, nmax)
+        vm = evaluate(model, val_loader, target_parity, PAD_ID, device, nmin, nmax)
 
         train_loss = tm["token_loss"]
         val_loss = vm["token_loss"]
 
-        print(f"Epoch {epoch + 1}/{args.num_epochs}  (global_step={global_step})")
+        print(f"Epoch {epoch + 1}/{args.num_epochs}")
         print(f"  Train CE: {tm['loss_ce']:.4f}  (op_ce={tm['op_ce']:.4f}  eos_ce={tm['eos_ce']:.4f})"
               f"  seq_nll={tm['mean_seq_nll']:.2f}  tok_nll={tm['mean_token_nll']:.4f}")
         print(f"  Val   CE: {vm['loss_ce']:.4f}  (op_ce={vm['op_ce']:.4f}  eos_ce={vm['eos_ce']:.4f})"
               f"  seq_nll={vm['mean_seq_nll']:.2f}  tok_nll={vm['mean_token_nll']:.4f}")
-        if logfact_table is not None:
-            lambda_eff_t = args.lambda_flat if epoch >= args.flat_warmup_epochs else 0.0
-            train_total = tm['loss_ce'] + lambda_eff_t * tm['loss_flat']
-            val_total = vm['loss_ce'] + lambda_eff_t * vm['loss_flat']
-            print(f"  Train z: mean={tm['z_mean']:.3f}  std={tm['z_std']:.3f}  max={tm['z_max']:.3f}"
-                  f"  flat={tm['flat_diag']:.6f}  total={train_total:.4f}")
-            print(f"  Val   z: mean={vm['z_mean']:.3f}  std={vm['z_std']:.3f}  max={vm['z_max']:.3f}"
-                  f"  flat={vm['flat_diag']:.6f}  total={val_total:.4f}")
 
-        # Early stopping metric (use CE only during warmup)
-        if args.early_stop_metric == 'total' and epoch >= args.flat_warmup_epochs:
-            es_val = vm["loss_ce"] + args.lambda_flat * vm["loss_flat"]
-        else:
-            es_val = vm["loss_ce"]
-
-        # Reset early stopping when transitioning from warmup to flat-enabled
-        if args.early_stop_metric == 'total' and epoch == args.flat_warmup_epochs:
-            best_val_loss = float('inf')
-            patience_counter = 0
-            print(f"  [warmup ended, early stopping reset to total metric]")
+        es_val = vm["loss_ce"]
 
         if es_val < best_val_loss - args.early_stopping_min_delta:
             best_val_loss = es_val
@@ -1707,11 +1534,6 @@ def main():
                 'dk_head_dk': args.dk_head_dk,
                 'dk_head_hidden': args.dk_head_hidden,
                 'version': 2,
-                'ce_reduction': args.ce_reduction,
-                'lambda_flat': args.lambda_flat,
-                'flat_warmup_epochs': args.flat_warmup_epochs,
-                'flat_min_batch': args.flat_min_batch,
-                'early_stop_metric': args.early_stop_metric,
                 'args': vars(args),
             }, os.path.join(args.output_dir, 'best_model.pt'))
             print(f"  ✓ Best model saved (es_metric={es_val:.4f})")
@@ -1740,4 +1562,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
