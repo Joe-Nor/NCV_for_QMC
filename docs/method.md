@@ -100,15 +100,32 @@ This allows the model to respect physical symmetries and improve sample efficien
 
 ### Model Training
 
-We train two separate models:
+We train two model families, and each family has separate even- and odd-parity
+models. A complete energy estimate therefore uses four checkpoints:
 
-1. **Numerator Model**: Learns p(C | sign(C) = +1)
-   - Trained on configurations with positive weights
-   - Used for computing ⟨O·sign⟩_CV
+1. **Numerator models**: `q_num,even(C)` and `q_num,odd(C)`
+   - Trained on configurations in the corresponding parity sector
+   - Use an observable-weighted loss; for the energy estimator this is the
+     `n_h`-weighted objective, so the learned distributions approximate the
+     numerator magnitude within each parity sector
+   - Used to construct the numerator control variate for ⟨H·sign⟩
 
-2. **Denominator Model**: Learns p(C)
-   - Trained on all configurations (weighted by |w(C)|)
-   - Used for computing ⟨sign⟩_CV
+2. **Denominator models**: `q_den,even(C)` and `q_den,odd(C)`
+   - Trained on configurations in the corresponding parity sector
+   - Use the absolute-weight sampling distribution without the extra `n_h`
+     numerator weight
+   - Used to construct the denominator control variate for ⟨sign⟩
+
+The even and odd models are combined as a signed difference. For a sampling
+density `f(C) ∝ |w(C)|`, the zero-mean control-variate function has the form:
+
+```
+h(C) = (q_even(C) - q_odd(C)) / f(C)
+```
+
+because `E_f[h] = Σ_C (q_even(C) - q_odd(C)) = 0` when both parity models are
+normalized. The implementation applies this construction separately to the
+numerator and denominator model families.
 
 Training uses:
 - **Loss**: Negative log-likelihood
@@ -127,16 +144,27 @@ The ground state energy is computed as:
 E = ⟨H·sign⟩ / ⟨sign⟩
 ```
 
-We construct control variates for both numerator and denominator:
+We construct parity-difference control variates for both numerator and
+denominator. Let `f(C) ∝ |w(C)|` be the sampling density. The implementation
+uses:
 
 ```
-⟨H·sign⟩_CV = ⟨H·sign⟩ - α_num(f_num - ⟨f_num⟩)
-⟨sign⟩_CV = ⟨sign⟩ - α_den(f_den - ⟨f_den⟩)
+h_num(C) = (q_num,even(C) - q_num,odd(C)) / f(C)
+h_den(C) = (q_den,even(C) - q_den,odd(C)) / f(C)
 ```
 
-where:
-- `f_num(C) = log p_num(C)` (from numerator model)
-- `f_den(C) = log p_den(C)` (from denominator model)
+and then forms:
+
+```
+A_CV(C) = H(C)·sign(C) - c_num h_num(C)
+B_CV(C) = sign(C) - c_den h_den(C)
+E_CV = ⟨A_CV⟩ / ⟨B_CV⟩
+```
+
+The coefficients `c_num` and `c_den` are estimated on training data. The joint
+estimator used in `compute_energy_jackknife_Cov.py` chooses them to reduce the
+variance of the final ratio, rather than fitting the numerator and denominator
+completely independently.
 
 ### Jackknife Estimation
 
